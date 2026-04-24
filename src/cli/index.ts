@@ -44,7 +44,7 @@ async function main(argv: string[]): Promise<void> {
 
   switch (command) {
     case "list":
-      printItems(await client.list(await resolveLedgerId(client, args), "active"));
+      await listItems(client, args);
       return;
     case "finished":
       printItems(await client.list(await resolveLedgerId(client, args), "finished"));
@@ -259,18 +259,18 @@ async function addChild(client: ChecklistCliClient, args: ParsedArgs): Promise<v
 
 async function showDetails(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
   const ledgerId = await resolveLedgerId(client, args);
-  const id = await resolveItemRef(client, ledgerId, args.positional[0], "item");
+  const id = await resolveItemRef(client, ledgerId, resolvePrimaryItemRef(args), "item");
   const allItems = [...(await client.list(ledgerId, "active")), ...(await client.list(ledgerId, "finished"))];
   const item = findItem(allItems, id);
   if (!item) {
     throw new Error(`Item ${id} was not found.`);
   }
-  printItem(item, { includeDetails: true });
+  printItem(item, { includeDetails: true, includeChildren: true });
 }
 
 async function updateItem(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
   const ledgerId = await resolveLedgerId(client, args);
-  const id = await resolveItemRef(client, ledgerId, args.positional[0], "item");
+  const id = await resolveItemRef(client, ledgerId, resolvePrimaryItemRef(args), "item");
   const input: UpdateItemRequest = {};
 
   const title = getStringFlag(args, "title");
@@ -294,14 +294,14 @@ async function changeStatus(
   action: "finish" | "reopen"
 ): Promise<void> {
   const ledgerId = await resolveLedgerId(client, args);
-  const id = await resolveItemRef(client, ledgerId, args.positional[0], "item");
+  const id = await resolveItemRef(client, ledgerId, resolvePrimaryItemRef(args), "item");
   const item = action === "finish" ? await client.finish(id) : await client.reopen(id);
   printItem(item);
 }
 
 async function moveItem(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
   const ledgerId = await resolveLedgerId(client, args);
-  const id = await resolveItemRef(client, ledgerId, args.positional[0], "item");
+  const id = await resolveItemRef(client, ledgerId, resolvePrimaryItemRef(args), "item");
   const before = getStringFlag(args, "before");
   const after = getStringFlag(args, "after");
 
@@ -314,6 +314,14 @@ async function moveItem(client: ChecklistCliClient, args: ParsedArgs): Promise<v
   const targetId = await resolveItemRef(client, ledgerId, before ?? after, "target item");
   const nextOrder = moveId(orderedIds, id, targetId, before ? "before" : "after");
   printItems(await client.reorder({ ledgerId, parentId: null, orderedIds: nextOrder }));
+}
+
+async function listItems(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
+  const ledgerId = await resolveLedgerId(client, args);
+  const active = await client.list(ledgerId, "active");
+  const { includeDetails, range } = parseListOptions(args);
+  const selected = range ? active.slice(range.start - 1, range.end) : active;
+  printItems(selected, { includeDetails, includeChildren: includeDetails });
 }
 
 async function findItems(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
@@ -421,33 +429,96 @@ function getStringFlag(args: ParsedArgs, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function parseRequiredId(value: string | undefined, label: string): number {
-  const id = Number(value);
-  if (!value || !Number.isInteger(id) || id <= 0) {
-    throw new Error(`Expected a positive numeric ${label}.`);
-  }
-  return id;
+function resolvePrimaryItemRef(args: ParsedArgs): string | undefined {
+  return getStringFlag(args, "item") ?? args.positional[0];
 }
 
-function printItems(items: ChecklistItem[]): void {
+function parseListOptions(args: ParsedArgs): {
+  includeDetails: boolean;
+  range: { start: number; end: number } | null;
+} {
+  let includeDetails = false;
+  let range: { start: number; end: number } | null = null;
+
+  for (const value of args.positional) {
+    if (value.toLowerCase() === "full") {
+      includeDetails = true;
+      continue;
+    }
+
+    const parsedRange = parseRange(value);
+    if (parsedRange) {
+      range = parsedRange;
+      continue;
+    }
+
+    throw new Error(`Unknown list argument "${value}". Use: checklist list [full] [1-4] --ledger <id-or-name>`);
+  }
+
+  return { includeDetails, range };
+}
+
+function parseRange(value: string): { start: number; end: number } | null {
+  const match = value.match(/^(\d+)-(\d+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start <= 0 || end < start) {
+    throw new Error(`Invalid list range "${value}". Use a 1-based range like 1-4.`);
+  }
+
+  return { start, end };
+}
+
+function printItems(
+  items: ChecklistItem[],
+  options: { includeDetails?: boolean; includeChildren?: boolean } = {}
+): void {
   if (items.length === 0) {
     console.log("No items.");
     return;
   }
 
   for (const item of items) {
-    printItem(item);
-    for (const child of item.children) {
-      console.log(`  - #${child.id} ${child.title}`);
+    printItem(item, options);
+    if (!options.includeChildren) {
+      for (const child of item.children) {
+        console.log(`  - #${child.id} ${child.title}`);
+      }
     }
   }
 }
 
-function printItem(item: ChecklistItem, options: { includeDetails?: boolean } = {}): void {
+function printItem(
+  item: ChecklistItem,
+  options: { includeDetails?: boolean; includeChildren?: boolean } = {}
+): void {
   const status = item.status === "finished" ? "done" : "active";
   console.log(`#${item.id} [${status}] ledger:${item.ledgerId} ${item.title}`);
-  if (options.includeDetails && item.details) {
-    console.log(item.details);
+  if (options.includeDetails) {
+    console.log(`  details: ${item.details || "(none)"}`);
+    console.log(`  created: ${item.createdAt}`);
+    console.log(`  updated: ${item.updatedAt}`);
+    if (item.completedAt) {
+      console.log(`  completed: ${item.completedAt}`);
+    }
+  }
+  if (options.includeChildren) {
+    if (item.children.length === 0) {
+      console.log("  subitems: (none)");
+      return;
+    }
+    console.log("  subitems:");
+    for (const child of item.children) {
+      const childStatus = child.status === "finished" ? "done" : "active";
+      console.log(`    #${child.id} [${childStatus}] ${child.title}`);
+      if (options.includeDetails) {
+        console.log(`      details: ${child.details || "(none)"}`);
+      }
+    }
   }
 }
 
@@ -470,6 +541,9 @@ function printHelp(): void {
 
 Commands:
   checklist list
+  checklist list full
+  checklist list 1-4
+  checklist list full 1-4
   checklist finished
   checklist ledgers
   checklist ledger add "Ledger name"
@@ -477,11 +551,14 @@ Commands:
   checklist add "Title" --details "Optional details"
   checklist child <item-id-or-title> "Child title"
   checklist details <item-id-or-title>
+  checklist details --item <item-id-or-title>
   checklist update <item-id-or-title> --title "..." --details "..."
+  checklist update --item <item-id-or-title> --title "..." --details "..."
   checklist done <item-id-or-title>
+  checklist done --item <item-id-or-title>
   checklist reopen <item-id-or-title>
   checklist move <item-id-or-title> --before <other-id-or-title>
-  checklist move <item-id-or-title> --after <other-id-or-title>
+  checklist move --item <item-id-or-title> --after <other-id-or-title>
 
 Ledger selection:
   Add --ledger <id-or-name> to list, finished, add, child, details, update, done, reopen, find, or move.

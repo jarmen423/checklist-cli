@@ -106,12 +106,16 @@ Run commands:
 
 ```powershell
 checklist list
+checklist list full
+checklist list 1-4 --ledger Today
+checklist list full 1-4 --ledger Today
 checklist add "Write deployment notes" --details "Add D1 setup and custom domain steps."
 checklist child 1 "Create the production D1 database"
 checklist move 2 --before 1
 checklist done 1
 checklist finished
 checklist reopen 1
+checklist details --item 1
 ```
 
 After `npm run build`, the compiled binary entrypoint is available at:
@@ -229,4 +233,11 @@ checklist ledgers
 checklist ledger add "Home"
 checklist add "Pay electric bill" --ledger Home
 checklist list --ledger Home
+```
+
+PowerShell treats unquoted `#5` as a comment. Use `5` or quote the hash form:
+
+```powershell
+checklist details --ledger slarmen --item 5
+checklist details --ledger slarmen --item "#5"
 ```

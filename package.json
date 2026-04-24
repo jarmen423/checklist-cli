@@ -1,6 +1,6 @@
 {
   "name": "checklist-ledger",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI and Cloudflare app for a token-protected checklist ledger.",
   "private": false,
   "type": "module",

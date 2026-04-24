@@ -81,6 +81,25 @@ List active items in the default ledger:
 checklist list
 ```
 
+List the whole active ledger with details and subitems:
+
+```powershell
+checklist list full --ledger Today
+checklist list full --ledger slarmen
+```
+
+List a 1-based range of top-level active items:
+
+```powershell
+checklist list 1-4 --ledger Today
+```
+
+List a 1-based range with full details and subitems:
+
+```powershell
+checklist list full 1-4 --ledger Today
+```
+
 List finished items:
 
 ```powershell
@@ -100,7 +119,17 @@ matches:
 
 ```powershell
 checklist details 12
+checklist details --item 12
 checklist details "electric"
+checklist details --item "electric"
+```
+
+In PowerShell, `#5` starts a comment unless quoted. Prefer `5`, or quote the
+hash form:
+
+```powershell
+checklist details --item 5
+checklist details --item "#5"
 ```
 
 If a title fragment matches multiple items, the CLI prints the candidate IDs so
@@ -134,6 +163,7 @@ Update title or details:
 
 ```powershell
 checklist update 12 --title "Write CLI docs"
+checklist update --item 12 --title "Write CLI docs"
 checklist update "deployment notes" --details "Document npm install and token setup."
 ```
 
@@ -141,6 +171,7 @@ Finish and reopen:
 
 ```powershell
 checklist done 12
+checklist done --item 12
 checklist done "deployment notes"
 checklist reopen 12
 ```
@@ -149,6 +180,7 @@ Reorder top-level active items:
 
 ```powershell
 checklist move 14 --before 12
+checklist move --item 14 --before 12
 checklist move "write docs" --after "deploy app"
 ```
 
