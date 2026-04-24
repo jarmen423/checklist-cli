@@ -194,6 +194,12 @@ npm run deploy:dry-run
 The dry run validates that Wrangler can bundle the Worker, read static assets,
 and see the D1 and asset bindings without publishing a new Worker version.
 
+GitHub Actions automation is documented at:
+
+```text
+C:\Users\jfrie\Documents\Codex\2026-04-23\can-you-access-my-google-tasks\docs\GITHUB_ACTIONS.md
+```
+
 For CLI use against production, set:
 
 ```powershell
