@@ -226,17 +226,25 @@ The top toolbar supports:
 
 - selecting a ledger
 - creating a ledger
+- archiving or deleting the selected ledger
 - toggling light/dark mode
 
 The browser remembers the selected ledger and theme in localStorage. The CLI
 defaults to ledger `1`, or another ledger when `CHECKLIST_LEDGER_ID` or
 `defaultLedgerId` is configured.
 
+Ledger archive is reversible and keeps items intact. Ledger delete is permanent
+and removes every item inside that ledger.
+
 Ledger CLI examples:
 
 ```powershell
 checklist ledgers
+checklist ledgers --all
 checklist ledger add "Home"
+checklist ledger archive Home
+checklist ledger restore Home
+checklist ledger delete Home --yes
 checklist add "Pay electric bill" --ledger Home
 checklist list --ledger Home
 ```

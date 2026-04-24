@@ -47,6 +47,8 @@ async function handleApiRequest(request: Request, env: Env, url: URL): Promise<R
   const path = url.pathname;
   const itemAction = path.match(/^\/api\/items\/(\d+)\/(finish|reopen)$/);
   const itemPatch = path.match(/^\/api\/items\/(\d+)$/);
+  const ledgerAction = path.match(/^\/api\/ledgers\/(\d+)\/(archive|restore)$/);
+  const ledgerDelete = path.match(/^\/api\/ledgers\/(\d+)$/);
 
   if (method === "GET" && path === "/api/items") {
     const status = parseStatus(url.searchParams.get("status"));
@@ -55,12 +57,25 @@ async function handleApiRequest(request: Request, env: Env, url: URL): Promise<R
   }
 
   if (method === "GET" && path === "/api/ledgers") {
-    return jsonResponse({ ledgers: await repo.listLedgers() });
+    const includeArchived = url.searchParams.get("includeArchived") === "true";
+    return jsonResponse({ ledgers: await repo.listLedgers({ includeArchived }) });
   }
 
   if (method === "POST" && path === "/api/ledgers") {
     const body = await readJson<CreateLedgerRequest>(request);
     return jsonResponse({ ledger: await repo.createLedger(body) }, { status: 201 });
+  }
+
+  if (method === "POST" && ledgerAction) {
+    const id = Number(ledgerAction[1]);
+    const action = ledgerAction[2];
+    const ledger = action === "archive" ? await repo.archiveLedger(id) : await repo.restoreLedger(id);
+    return jsonResponse({ ledger });
+  }
+
+  if (method === "DELETE" && ledgerDelete) {
+    await repo.deleteLedger(Number(ledgerDelete[1]));
+    return jsonResponse({ ok: true });
   }
 
   if (method === "POST" && path === "/api/items") {

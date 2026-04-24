@@ -55,6 +55,7 @@ List ledgers:
 
 ```powershell
 checklist ledgers
+checklist ledgers --all
 ```
 
 Create a ledger:
@@ -62,6 +63,17 @@ Create a ledger:
 ```powershell
 checklist ledger add "Home"
 ```
+
+Archive, restore, or permanently delete a ledger:
+
+```powershell
+checklist ledger archive Home
+checklist ledger restore Home
+checklist ledger delete Home --yes
+```
+
+Archive hides a ledger from the normal UI and CLI list while keeping its items.
+Delete removes the ledger and all of its items permanently.
 
 Use a ledger by ID or name:
 
@@ -71,7 +83,8 @@ checklist list --ledger Today
 checklist add "Pay electric bill" --ledger Home
 ```
 
-Use `checklist ledgers` whenever you need to discover valid ledger IDs or names.
+Use `checklist ledgers` whenever you need to discover active ledger IDs or names.
+Use `checklist ledgers --all` when restoring or deleting an archived ledger.
 
 ## Item Discovery
 
@@ -195,8 +208,9 @@ Item output includes:
 Ledger output includes:
 
 ```text
-#1 Today
+#1 [active] Today
 ```
 
 Codex should prefer exact IDs after discovery, especially for destructive or
-state-changing commands such as `done`, `reopen`, `update`, and `move`.
+state-changing commands such as `done`, `reopen`, `update`, `move`, and
+`ledger delete`.

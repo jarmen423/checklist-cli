@@ -177,6 +177,12 @@ button:disabled {
   gap: 10px;
 }
 
+.ledger-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ledger-picker {
   display: grid;
   grid-template-columns: minmax(120px, 160px) minmax(110px, 140px) 38px;
@@ -194,7 +200,8 @@ button:disabled {
   background: var(--panel);
 }
 
-.ledger-picker button {
+.ledger-picker button,
+.ledger-actions button {
   display: grid;
   place-items: center;
   width: 38px;
@@ -203,6 +210,21 @@ button:disabled {
   border-radius: 7px;
   color: var(--accent-text);
   background: var(--accent);
+}
+
+.ledger-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ledger-actions button {
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--panel);
+}
+
+.ledger-actions button.danger {
+  color: var(--warn);
 }
 
 .segmented {
@@ -418,8 +440,18 @@ button:disabled {
     flex-direction: column;
   }
 
+  .ledger-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .ledger-picker {
     grid-template-columns: 1fr minmax(110px, 1fr) 38px;
+  }
+
+  .ledger-actions button {
+    flex: 1;
+    width: auto;
   }
 
   .segmented {

@@ -27,6 +27,7 @@ export interface Ledger {
   name: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
 }
 
 export interface CreateItemRequest {

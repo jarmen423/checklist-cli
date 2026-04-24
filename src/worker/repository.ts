@@ -26,6 +26,7 @@ interface LedgerRow {
   name: string;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 }
 
 /**
@@ -52,7 +53,8 @@ function rowToLedger(row: LedgerRow): Ledger {
     id: row.id,
     name: row.name,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    archivedAt: row.archived_at
   };
 }
 
@@ -108,9 +110,10 @@ export class ChecklistRepository {
    * Ledgers are lightweight named containers. The UI uses them as a selector,
    * while the CLI can address them by ID with `--ledger`.
    */
-  async listLedgers(): Promise<Ledger[]> {
+  async listLedgers(options: { includeArchived?: boolean } = {}): Promise<Ledger[]> {
+    const archivedFilter = options.includeArchived ? "" : "WHERE archived_at IS NULL";
     const result = await this.db
-      .prepare("SELECT id, name, created_at, updated_at FROM ledgers ORDER BY id ASC")
+      .prepare(`SELECT id, name, created_at, updated_at, archived_at FROM ledgers ${archivedFilter} ORDER BY id ASC`)
       .all<LedgerRow>();
 
     return (result.results ?? []).map(rowToLedger);
@@ -129,7 +132,7 @@ export class ChecklistRepository {
       .prepare(
         `INSERT INTO ledgers (name, created_at, updated_at)
          VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         RETURNING id, name, created_at, updated_at`
+         RETURNING id, name, created_at, updated_at, archived_at`
       )
       .bind(name)
       .first<LedgerRow>();
@@ -139,6 +142,62 @@ export class ChecklistRepository {
     }
 
     return rowToLedger(inserted);
+  }
+
+  /**
+   * Hides a ledger from normal active use without deleting its checklist rows.
+   *
+   * Archival is the safer cleanup path for old work because the ledger can be
+   * restored later. The repository keeps at least one active ledger available
+   * so the UI always has a valid destination after refresh.
+   */
+  async archiveLedger(id: number): Promise<Ledger> {
+    await this.requireActiveLedgerExists(id);
+    await this.requireAnotherActiveLedger(id, "Cannot archive the only active ledger.");
+    await this.db
+      .prepare(
+        `UPDATE ledgers
+         SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .bind(id)
+      .run();
+
+    return this.requireLedger(id, { includeArchived: true });
+  }
+
+  /**
+   * Makes an archived ledger selectable again.
+   */
+  async restoreLedger(id: number): Promise<Ledger> {
+    await this.requireLedger(id, { includeArchived: true });
+    await this.db
+      .prepare(
+        `UPDATE ledgers
+         SET archived_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .bind(id)
+      .run();
+
+    return this.requireLedger(id);
+  }
+
+  /**
+   * Permanently removes a ledger and every item contained by it.
+   *
+   * D1 does not have a foreign key from `items.ledger_id` in the current schema,
+   * so the repository explicitly deletes item rows before deleting the ledger.
+   */
+  async deleteLedger(id: number): Promise<void> {
+    await this.requireLedger(id, { includeArchived: true });
+    await this.requireAnotherActiveLedger(id, "Cannot delete the only active ledger.");
+    await this.db.batch([
+      this.db.prepare("DELETE FROM items WHERE ledger_id = ?").bind(id),
+      this.db.prepare("DELETE FROM ledgers WHERE id = ?").bind(id)
+    ]);
   }
 
   /**
@@ -407,13 +466,42 @@ export class ChecklistRepository {
   }
 
   private async requireLedgerExists(ledgerId: number): Promise<void> {
+    await this.requireActiveLedgerExists(ledgerId);
+  }
+
+  private async requireActiveLedgerExists(ledgerId: number): Promise<void> {
+    await this.requireLedger(ledgerId);
+  }
+
+  private async requireLedger(
+    ledgerId: number,
+    options: { includeArchived?: boolean } = {}
+  ): Promise<Ledger> {
+    const archivedFilter = options.includeArchived ? "" : "AND archived_at IS NULL";
     const ledger = await this.db
-      .prepare("SELECT id FROM ledgers WHERE id = ?")
+      .prepare(
+        `SELECT id, name, created_at, updated_at, archived_at
+         FROM ledgers
+         WHERE id = ? ${archivedFilter}`
+      )
       .bind(ledgerId)
-      .first<{ id: number }>();
+      .first<LedgerRow>();
 
     if (!ledger) {
       throw new Error(`Ledger ${ledgerId} does not exist.`);
+    }
+
+    return rowToLedger(ledger);
+  }
+
+  private async requireAnotherActiveLedger(ledgerId: number, message: string): Promise<void> {
+    const result = await this.db
+      .prepare("SELECT COUNT(*) AS count FROM ledgers WHERE archived_at IS NULL AND id != ?")
+      .bind(ledgerId)
+      .first<{ count: number }>();
+
+    if ((result?.count ?? 0) === 0) {
+      throw new Error(message);
     }
   }
 }

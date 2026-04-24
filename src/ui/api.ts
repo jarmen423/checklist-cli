@@ -26,8 +26,9 @@ export class ChecklistApi {
     );
   }
 
-  async ledgers(): Promise<Ledger[]> {
-    return this.request<{ ledgers: Ledger[] }>("/api/ledgers").then((body) => body.ledgers);
+  async ledgers(options: { includeArchived?: boolean } = {}): Promise<Ledger[]> {
+    const query = options.includeArchived ? "?includeArchived=true" : "";
+    return this.request<{ ledgers: Ledger[] }>(`/api/ledgers${query}`).then((body) => body.ledgers);
   }
 
   async createLedger(input: CreateLedgerRequest): Promise<Ledger> {
@@ -35,6 +36,24 @@ export class ChecklistApi {
       method: "POST",
       body: JSON.stringify(input)
     }).then((body) => body.ledger);
+  }
+
+  async archiveLedger(id: number): Promise<Ledger> {
+    return this.request<{ ledger: Ledger }>(`/api/ledgers/${id}/archive`, {
+      method: "POST"
+    }).then((body) => body.ledger);
+  }
+
+  async restoreLedger(id: number): Promise<Ledger> {
+    return this.request<{ ledger: Ledger }>(`/api/ledgers/${id}/restore`, {
+      method: "POST"
+    }).then((body) => body.ledger);
+  }
+
+  async deleteLedger(id: number): Promise<void> {
+    await this.request<{ ok: true }>(`/api/ledgers/${id}`, {
+      method: "DELETE"
+    });
   }
 
   async create(input: CreateItemRequest): Promise<ChecklistItem> {

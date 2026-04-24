@@ -10,7 +10,8 @@ import {
   RotateCcw,
   Save,
   Moon,
-  Sun
+  Sun,
+  Trash2
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ChecklistItem, ItemStatus, Ledger } from "../shared/types";
@@ -155,6 +156,22 @@ function ChecklistShell({ api, onLogout }: ChecklistShellProps) {
               setLedgers((current) => [...current, ledger]);
               setView("active");
             }}
+            onArchive={async () => {
+              if (!window.confirm(`Archive "${activeLedger.name}"? Its items will be hidden until the ledger is restored from the CLI.`)) {
+                return;
+              }
+              await api.archiveLedger(activeLedger.id);
+              setView("active");
+              await refresh();
+            }}
+            onDelete={async () => {
+              if (!window.confirm(`Delete "${activeLedger.name}" and every item in it? This cannot be undone.`)) {
+                return;
+              }
+              await api.deleteLedger(activeLedger.id);
+              setView("active");
+              await refresh();
+            }}
           />
           <SegmentedView value={view} onChange={setView} finishedCount={finished.length} />
           <button
@@ -221,47 +238,90 @@ interface LedgerPickerProps {
   activeLedgerId: number;
   onChange: (ledgerId: number) => void;
   onCreate: (name: string) => Promise<void>;
+  onArchive: () => Promise<void>;
+  onDelete: () => Promise<void>;
 }
 
-function LedgerPicker({ ledgers, activeLedgerId, onChange, onCreate }: LedgerPickerProps) {
+function LedgerPicker({ ledgers, activeLedgerId, onChange, onCreate, onArchive, onDelete }: LedgerPickerProps) {
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const canRemoveLedger = ledgers.length > 1;
 
   return (
-    <form
-      className="ledger-picker"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        if (!name.trim()) {
-          return;
-        }
-        setCreating(true);
-        await onCreate(name);
-        setName("");
-        setCreating(false);
-      }}
-    >
-      <select
-        aria-label="Active ledger"
-        value={activeLedgerId}
-        onChange={(event) => onChange(Number(event.target.value))}
+    <div className="ledger-controls">
+      <form
+        className="ledger-picker"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!name.trim()) {
+            return;
+          }
+          setCreating(true);
+          try {
+            await onCreate(name);
+            setName("");
+          } finally {
+            setCreating(false);
+          }
+        }}
       >
-        {ledgers.map((ledger) => (
-          <option key={ledger.id} value={ledger.id}>
-            {ledger.name}
-          </option>
-        ))}
-      </select>
-      <input
-        aria-label="New ledger name"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        placeholder="New ledger"
-      />
-      <button type="submit" disabled={creating || !name.trim()} title="Create ledger">
-        <Plus size={16} aria-hidden="true" />
-      </button>
-    </form>
+        <select
+          aria-label="Active ledger"
+          value={activeLedgerId}
+          onChange={(event) => onChange(Number(event.target.value))}
+          disabled={mutating}
+        >
+          {ledgers.map((ledger) => (
+            <option key={ledger.id} value={ledger.id}>
+              {ledger.name}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="New ledger name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="New ledger"
+        />
+        <button type="submit" disabled={creating || !name.trim()} title="Create ledger">
+          <Plus size={16} aria-hidden="true" />
+        </button>
+      </form>
+      <div className="ledger-actions" aria-label="Ledger actions">
+        <button
+          type="button"
+          disabled={!canRemoveLedger || mutating}
+          title={canRemoveLedger ? "Archive selected ledger" : "Create another ledger before archiving this one"}
+          onClick={async () => {
+            setMutating(true);
+            try {
+              await onArchive();
+            } finally {
+              setMutating(false);
+            }
+          }}
+        >
+          <Archive size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="danger"
+          disabled={!canRemoveLedger || mutating}
+          title={canRemoveLedger ? "Delete selected ledger" : "Create another ledger before deleting this one"}
+          onClick={async () => {
+            setMutating(true);
+            try {
+              await onDelete();
+            } finally {
+              setMutating(false);
+            }
+          }}
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -525,7 +585,8 @@ function chooseLedger(ledgers: Ledger[], requestedId: number): Ledger {
     id: 1,
     name: "Today",
     createdAt: "",
-    updatedAt: ""
+    updatedAt: "",
+    archivedAt: null
   };
 }
 

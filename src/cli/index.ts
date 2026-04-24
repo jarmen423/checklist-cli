@@ -50,7 +50,7 @@ async function main(argv: string[]): Promise<void> {
       printItems(await client.list(await resolveLedgerId(client, args), "finished"));
       return;
     case "ledgers":
-      printLedgers(await client.ledgers());
+      printLedgers(await client.ledgers({ includeArchived: args.flags.has("all") || args.flags.has("archived") }));
       return;
     case "ledger":
       await handleLedgerCommand(client, args);
@@ -159,8 +159,9 @@ class ChecklistCliClient {
     );
   }
 
-  async ledgers(): Promise<Ledger[]> {
-    return this.request<{ ledgers: Ledger[] }>("/api/ledgers").then((body) => body.ledgers);
+  async ledgers(options: { includeArchived?: boolean } = {}): Promise<Ledger[]> {
+    const query = options.includeArchived ? "?includeArchived=true" : "";
+    return this.request<{ ledgers: Ledger[] }>(`/api/ledgers${query}`).then((body) => body.ledgers);
   }
 
   async createLedger(name: string): Promise<Ledger> {
@@ -168,6 +169,24 @@ class ChecklistCliClient {
       method: "POST",
       body: JSON.stringify({ name })
     }).then((body) => body.ledger);
+  }
+
+  async archiveLedger(id: number): Promise<Ledger> {
+    return this.request<{ ledger: Ledger }>(`/api/ledgers/${id}/archive`, {
+      method: "POST"
+    }).then((body) => body.ledger);
+  }
+
+  async restoreLedger(id: number): Promise<Ledger> {
+    return this.request<{ ledger: Ledger }>(`/api/ledgers/${id}/restore`, {
+      method: "POST"
+    }).then((body) => body.ledger);
+  }
+
+  async deleteLedger(id: number): Promise<void> {
+    await this.request<{ ok: true }>(`/api/ledgers/${id}`, {
+      method: "DELETE"
+    });
   }
 
   async create(input: CreateItemRequest): Promise<ChecklistItem> {
@@ -338,14 +357,38 @@ async function findItems(client: ChecklistCliClient, args: ParsedArgs): Promise<
 
 async function handleLedgerCommand(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
   const [subcommand, ...nameParts] = args.positional;
-  if (subcommand !== "add") {
-    throw new Error('Usage: checklist ledger add "Ledger name"');
+  if (subcommand === "add") {
+    const name = nameParts.join(" ").trim();
+    if (!name) {
+      throw new Error('Usage: checklist ledger add "Ledger name"');
+    }
+    printLedger(await client.createLedger(name));
+    return;
   }
-  const name = nameParts.join(" ").trim();
-  if (!name) {
-    throw new Error('Usage: checklist ledger add "Ledger name"');
+
+  if (subcommand === "archive") {
+    const id = await resolveLedgerRef(client, nameParts.join(" ").trim(), { includeArchived: false });
+    printLedger(await client.archiveLedger(id));
+    return;
   }
-  printLedger(await client.createLedger(name));
+
+  if (subcommand === "restore") {
+    const id = await resolveLedgerRef(client, nameParts.join(" ").trim(), { includeArchived: true });
+    printLedger(await client.restoreLedger(id));
+    return;
+  }
+
+  if (subcommand === "delete") {
+    const id = await resolveLedgerRef(client, nameParts.join(" ").trim(), { includeArchived: true });
+    if (!args.flags.has("yes")) {
+      throw new Error("Ledger delete is permanent. Retry with --yes to delete the ledger and all of its items.");
+    }
+    await client.deleteLedger(id);
+    console.log(`Deleted ledger #${id}.`);
+    return;
+  }
+
+  throw new Error('Usage: checklist ledger add|archive|restore|delete "Ledger name or id"');
 }
 
 async function resolveLedgerId(client: ChecklistCliClient, args: ParsedArgs): Promise<number> {
@@ -368,6 +411,31 @@ async function resolveLedgerId(client: ChecklistCliClient, args: ParsedArgs): Pr
     throw new Error(`Ledger name "${ledgerRef}" matched multiple ledgers. Use one of these IDs: ${matches.map((ledger) => ledger.id).join(", ")}`);
   }
   throw new Error(`Ledger "${ledgerRef}" was not found. Run checklist ledgers to see available ledgers.`);
+}
+
+async function resolveLedgerRef(
+  client: ChecklistCliClient,
+  ref: string,
+  options: { includeArchived: boolean }
+): Promise<number> {
+  if (!ref) {
+    throw new Error("Expected ledger ID or exact ledger name.");
+  }
+
+  const numeric = parseOptionalPositiveInt(ref);
+  if (numeric !== undefined) {
+    return numeric;
+  }
+
+  const ledgers = await client.ledgers({ includeArchived: options.includeArchived });
+  const matches = ledgers.filter((ledger) => ledger.name.toLowerCase() === ref.toLowerCase());
+  if (matches.length === 1) {
+    return matches[0].id;
+  }
+  if (matches.length > 1) {
+    throw new Error(`Ledger name "${ref}" matched multiple ledgers. Use one of these IDs: ${matches.map((ledger) => ledger.id).join(", ")}`);
+  }
+  throw new Error(`Ledger "${ref}" was not found.`);
 }
 
 function parseOptionalPositiveInt(value: string | number | undefined): number | undefined {
@@ -533,7 +601,8 @@ function printLedgers(ledgers: Ledger[]): void {
 }
 
 function printLedger(ledger: Ledger): void {
-  console.log(`#${ledger.id} ${ledger.name}`);
+  const state = ledger.archivedAt ? "archived" : "active";
+  console.log(`#${ledger.id} [${state}] ${ledger.name}`);
 }
 
 function printHelp(): void {
@@ -546,7 +615,11 @@ Commands:
   checklist list full 1-4
   checklist finished
   checklist ledgers
+  checklist ledgers --all
   checklist ledger add "Ledger name"
+  checklist ledger archive <ledger-id-or-name>
+  checklist ledger restore <ledger-id-or-name>
+  checklist ledger delete <ledger-id-or-name> --yes
   checklist find "search text"
   checklist add "Title" --details "Optional details"
   checklist child <item-id-or-title> "Child title"
