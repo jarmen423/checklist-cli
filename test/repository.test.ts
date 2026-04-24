@@ -34,6 +34,7 @@ describe("nestItems", () => {
 function row(overrides: Partial<Parameters<typeof nestItems>[0][number]>) {
   return {
     id: 1,
+    ledger_id: 1,
     title: "item",
     details: "",
     status: "active" as const,

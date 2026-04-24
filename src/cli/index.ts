@@ -6,6 +6,7 @@ import type {
   ChecklistItem,
   CreateItemRequest,
   ItemStatus,
+  Ledger,
   ReorderItemsRequest,
   UpdateItemRequest
 } from "../shared/types.js";
@@ -14,6 +15,7 @@ import { moveId } from "../shared/order.js";
 interface CliConfig {
   apiUrl: string;
   adminToken: string;
+  defaultLedgerId?: number;
 }
 
 interface ParsedArgs {
@@ -42,10 +44,16 @@ async function main(argv: string[]): Promise<void> {
 
   switch (command) {
     case "list":
-      printItems(await client.list("active"));
+      printItems(await client.list(resolveLedgerId(config, args), "active"));
       return;
     case "finished":
-      printItems(await client.list("finished"));
+      printItems(await client.list(resolveLedgerId(config, args), "finished"));
+      return;
+    case "ledgers":
+      printLedgers(await client.ledgers());
+      return;
+    case "ledger":
+      await handleLedgerCommand(client, args);
       return;
     case "add":
       await addItem(client, args);
@@ -82,6 +90,9 @@ function loadConfig(): CliConfig {
   const fileConfig = loadFileConfig();
   const apiUrl = process.env.CHECKLIST_API_URL ?? fileConfig.apiUrl;
   const adminToken = process.env.CHECKLIST_ADMIN_TOKEN ?? fileConfig.adminToken;
+  const defaultLedgerId = parseOptionalPositiveInt(
+    process.env.CHECKLIST_LEDGER_ID ?? String(fileConfig.defaultLedgerId ?? "")
+  );
 
   if (!apiUrl || !adminToken) {
     throw new Error(
@@ -91,7 +102,8 @@ function loadConfig(): CliConfig {
 
   return {
     apiUrl: apiUrl.replace(/\/$/, ""),
-    adminToken
+    adminToken,
+    defaultLedgerId
   };
 }
 
@@ -137,12 +149,23 @@ function parseArgs(args: string[]): ParsedArgs {
 }
 
 class ChecklistCliClient {
-  constructor(private readonly config: CliConfig) {}
+  constructor(public readonly config: CliConfig) {}
 
-  async list(status: ItemStatus): Promise<ChecklistItem[]> {
-    return this.request<{ items: ChecklistItem[] }>(`/api/items?status=${status}`).then(
+  async list(ledgerId: number, status: ItemStatus): Promise<ChecklistItem[]> {
+    return this.request<{ items: ChecklistItem[] }>(`/api/items?ledgerId=${ledgerId}&status=${status}`).then(
       (body) => body.items
     );
+  }
+
+  async ledgers(): Promise<Ledger[]> {
+    return this.request<{ ledgers: Ledger[] }>("/api/ledgers").then((body) => body.ledgers);
+  }
+
+  async createLedger(name: string): Promise<Ledger> {
+    return this.request<{ ledger: Ledger }>("/api/ledgers", {
+      method: "POST",
+      body: JSON.stringify({ name })
+    }).then((body) => body.ledger);
   }
 
   async create(input: CreateItemRequest): Promise<ChecklistItem> {
@@ -213,6 +236,7 @@ async function addItem(client: ChecklistCliClient, args: ParsedArgs): Promise<vo
   }
 
   const item = await client.create({
+    ledgerId: resolveLedgerId(client.config, args),
     title,
     details: getStringFlag(args, "details") ?? ""
   });
@@ -226,13 +250,14 @@ async function addChild(client: ChecklistCliClient, args: ParsedArgs): Promise<v
     throw new Error('Usage: checklist child <item-id> "Child title"');
   }
 
-  const item = await client.create({ title, parentId });
+  const item = await client.create({ ledgerId: resolveLedgerId(client.config, args), title, parentId });
   printItem(item);
 }
 
 async function showDetails(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
   const id = parseRequiredId(args.positional[0], "item ID");
-  const allItems = [...(await client.list("active")), ...(await client.list("finished"))];
+  const ledgerId = resolveLedgerId(client.config, args);
+  const allItems = [...(await client.list(ledgerId, "active")), ...(await client.list(ledgerId, "finished"))];
   const item = findItem(allItems, id);
   if (!item) {
     throw new Error(`Item ${id} was not found.`);
@@ -278,11 +303,40 @@ async function moveItem(client: ChecklistCliClient, args: ParsedArgs): Promise<v
     throw new Error("Usage: checklist move <item-id> --before <other-id> OR --after <other-id>");
   }
 
-  const active = await client.list("active");
+  const ledgerId = resolveLedgerId(client.config, args);
+  const active = await client.list(ledgerId, "active");
   const orderedIds = active.map((item) => item.id);
   const targetId = parseRequiredId(before ?? after, "target item ID");
   const nextOrder = moveId(orderedIds, id, targetId, before ? "before" : "after");
-  printItems(await client.reorder({ parentId: null, orderedIds: nextOrder }));
+  printItems(await client.reorder({ ledgerId, parentId: null, orderedIds: nextOrder }));
+}
+
+async function handleLedgerCommand(client: ChecklistCliClient, args: ParsedArgs): Promise<void> {
+  const [subcommand, ...nameParts] = args.positional;
+  if (subcommand !== "add") {
+    throw new Error('Usage: checklist ledger add "Ledger name"');
+  }
+  const name = nameParts.join(" ").trim();
+  if (!name) {
+    throw new Error('Usage: checklist ledger add "Ledger name"');
+  }
+  printLedger(await client.createLedger(name));
+}
+
+function resolveLedgerId(config: CliConfig, args: ParsedArgs): number {
+  const fromFlag = parseOptionalPositiveInt(getStringFlag(args, "ledger") ?? "");
+  return fromFlag ?? config.defaultLedgerId ?? 1;
+}
+
+function parseOptionalPositiveInt(value: string): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected a positive ledger ID, got ${value}.`);
+  }
+  return parsed;
 }
 
 function findItem(items: ChecklistItem[], id: number): ChecklistItem | null {
@@ -327,10 +381,24 @@ function printItems(items: ChecklistItem[]): void {
 
 function printItem(item: ChecklistItem, options: { includeDetails?: boolean } = {}): void {
   const status = item.status === "finished" ? "done" : "active";
-  console.log(`#${item.id} [${status}] ${item.title}`);
+  console.log(`#${item.id} [${status}] ledger:${item.ledgerId} ${item.title}`);
   if (options.includeDetails && item.details) {
     console.log(item.details);
   }
+}
+
+function printLedgers(ledgers: Ledger[]): void {
+  if (ledgers.length === 0) {
+    console.log("No ledgers.");
+    return;
+  }
+  for (const ledger of ledgers) {
+    printLedger(ledger);
+  }
+}
+
+function printLedger(ledger: Ledger): void {
+  console.log(`#${ledger.id} ${ledger.name}`);
 }
 
 function printHelp(): void {
@@ -339,6 +407,8 @@ function printHelp(): void {
 Commands:
   checklist list
   checklist finished
+  checklist ledgers
+  checklist ledger add "Ledger name"
   checklist add "Title" --details "Optional details"
   checklist child <item-id> "Child title"
   checklist details <item-id>
@@ -348,12 +418,17 @@ Commands:
   checklist move <item-id> --before <other-id>
   checklist move <item-id> --after <other-id>
 
+Ledger selection:
+  Add --ledger <id> to list, finished, add, child, details, update, done, reopen, or move.
+  Set CHECKLIST_LEDGER_ID to change the default ledger from 1.
+
 Config:
   CHECKLIST_API_URL=https://your-domain.example
   CHECKLIST_ADMIN_TOKEN=your-admin-token
+  CHECKLIST_LEDGER_ID=1
 
 Optional file:
-  ~/.checklist-ledger.json with {"apiUrl":"...","adminToken":"..."}
+  ~/.checklist-ledger.json with {"apiUrl":"...","adminToken":"...","defaultLedgerId":1}
 `);
 }
 

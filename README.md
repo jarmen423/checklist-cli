@@ -169,8 +169,30 @@ $env:CHECKLIST_ADMIN_TOKEN = "your-production-token"
 
 - `status = active` rows appear in the active checklist
 - `status = finished` rows appear in the Finished view
+- `ledger_id = <id>` scopes items to one named ledger
 - `parent_id = null` means top-level item
 - `parent_id = <id>` means one-level child item
 
 The Worker rejects grandchildren in v1 so the UI, CLI, and data model stay easy
 to reason about.
+
+## Ledgers and Dark Mode
+
+The top toolbar supports:
+
+- selecting a ledger
+- creating a ledger
+- toggling light/dark mode
+
+The browser remembers the selected ledger and theme in localStorage. The CLI
+defaults to ledger `1`, or another ledger when `CHECKLIST_LEDGER_ID` or
+`defaultLedgerId` is configured.
+
+Ledger CLI examples:
+
+```powershell
+npm run cli -- ledgers
+npm run cli -- ledger add "Home"
+npm run cli -- add "Pay electric bill" --ledger 2
+npm run cli -- list --ledger 2
+```
