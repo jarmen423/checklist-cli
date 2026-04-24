@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hosted-checklist",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-04-23",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist/client"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "checklist-ledger",
+      "database_id": "4094cd40-9c59-4434-915e-dd95cd63ab54",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

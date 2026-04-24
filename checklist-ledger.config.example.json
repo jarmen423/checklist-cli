@@ -1,0 +1,4 @@
+{
+  "apiUrl": "https://your-custom-domain.example",
+  "adminToken": "replace-with-the-same-token-used-for-the-worker-secret"
+}

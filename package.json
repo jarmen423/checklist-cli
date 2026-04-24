@@ -1,0 +1,40 @@
+{
+  "name": "hosted-checklist",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "checklist": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "vite build && tsc -p tsconfig.cli.json",
+    "build:ui": "vite build",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "check": "tsc --noEmit && tsc -p tsconfig.cli.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
+    "db:migrate:local": "wrangler d1 migrations apply checklist-ledger --local",
+    "db:migrate:remote": "wrangler d1 migrations apply checklist-ledger --remote",
+    "cli": "tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "vite": "^7.2.7",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "lucide-react": "^0.561.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260423.0",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15",
+    "wrangler": "^4.55.0"
+  }
+}

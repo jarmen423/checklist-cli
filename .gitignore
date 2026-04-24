@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+*.local
+wrangler-dev.*.log
+wrangler-dev.pid
+~
+.checklist-production-token.txt
