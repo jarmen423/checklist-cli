@@ -61,6 +61,40 @@ Use the token from `.dev.vars` in the browser login screen.
 The CLI talks to the same API as the browser UI. This is the safe control layer
 for Codex because every mutation still passes through validation in the Worker.
 
+Full CLI reference:
+
+```text
+C:\Users\jfrie\Documents\Codex\2026-04-23\can-you-access-my-google-tasks\docs\CLI.md
+```
+
+After npm publish, install it on another machine with:
+
+```powershell
+npm install -g checklist-ledger
+checklist help
+```
+
+Until npm auth is configured and the first publish completes, install from this
+working copy or a tarball:
+
+```powershell
+npm install -g C:\Users\jfrie\Documents\Codex\2026-04-23\can-you-access-my-google-tasks
+```
+
+On this machine, the command shim is installed at:
+
+```text
+C:\Users\jfrie\bin\checklist.cmd
+```
+
+That means you can run commands directly:
+
+```powershell
+checklist help
+checklist ledgers
+checklist list
+```
+
 Set the remote or local API target:
 
 ```powershell
@@ -71,13 +105,13 @@ $env:CHECKLIST_ADMIN_TOKEN = "local-dev-token"
 Run commands:
 
 ```powershell
-npm run cli -- list
-npm run cli -- add "Write deployment notes" --details "Add D1 setup and custom domain steps."
-npm run cli -- child 1 "Create the production D1 database"
-npm run cli -- move 2 --before 1
-npm run cli -- done 1
-npm run cli -- finished
-npm run cli -- reopen 1
+checklist list
+checklist add "Write deployment notes" --details "Add D1 setup and custom domain steps."
+checklist child 1 "Create the production D1 database"
+checklist move 2 --before 1
+checklist done 1
+checklist finished
+checklist reopen 1
 ```
 
 After `npm run build`, the compiled binary entrypoint is available at:
@@ -191,8 +225,8 @@ defaults to ledger `1`, or another ledger when `CHECKLIST_LEDGER_ID` or
 Ledger CLI examples:
 
 ```powershell
-npm run cli -- ledgers
-npm run cli -- ledger add "Home"
-npm run cli -- add "Pay electric bill" --ledger 2
-npm run cli -- list --ledger 2
+checklist ledgers
+checklist ledger add "Home"
+checklist add "Pay electric bill" --ledger Home
+checklist list --ledger Home
 ```

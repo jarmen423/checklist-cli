@@ -1,11 +1,19 @@
 {
-  "name": "hosted-checklist",
+  "name": "checklist-ledger",
   "version": "0.1.0",
-  "private": true,
+  "description": "CLI and Cloudflare app for a token-protected checklist ledger.",
+  "private": false,
   "type": "module",
   "bin": {
-    "checklist": "./dist/cli/index.js"
+    "checklist": "dist/cli/index.js"
   },
+  "files": [
+    "dist/cli",
+    "dist/shared",
+    "README.md",
+    "docs/CLI.md",
+    "checklist-ledger.config.example.json"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "build": "vite build && tsc -p tsconfig.cli.json",
@@ -20,14 +28,13 @@
     "db:migrate:remote": "wrangler d1 migrations apply checklist-ledger --remote",
     "cli": "tsx src/cli/index.ts"
   },
-  "dependencies": {
-    "@vitejs/plugin-react": "^5.1.1",
-    "vite": "^7.2.7",
+  "dependencies": {},
+  "devDependencies": {
+    "lucide-react": "^0.561.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "lucide-react": "^0.561.0"
-  },
-  "devDependencies": {
+    "vite": "^7.2.7",
+    "@vitejs/plugin-react": "^5.1.1",
     "@cloudflare/workers-types": "^4.20260423.0",
     "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",

@@ -1,0 +1,35 @@
+There is no packaged installer yet.
+Another machine can use the CLI by cloning/copying the repo, installing Node deps, building the CLI, and configuring the token.
+Install on another Windows machine
+
+git clone <repo-url> checklist-ledger
+cd checklist-ledger
+npm install
+npm run build
+Create CLI config
+
+notepad $HOME\.checklist-ledger.json
+Put this in it:
+
+{
+  "apiUrl": "https://todo.joshfriedman-dev.com",
+  "adminToken": "PASTE_ADMIN_TOKEN_HERE",
+  "defaultLedgerId": 1
+}
+Run without installing globally
+
+node .\dist\cli\index.js help
+node .\dist\cli\index.js ledgers
+node .\dist\cli\index.js list
+Optional: make a checklist command
+Create a folder on PATH, for example:
+
+mkdir $HOME\bin -Force
+Create $HOME\bin\checklist.cmd:
+
+@echo off
+node "C:\path\to\checklist-ledger\dist\cli\index.js" %*
+Then run:
+
+checklist help
+checklist list
