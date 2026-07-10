@@ -9,6 +9,11 @@ Checklist Ledger is a single-user hosted checklist app designed for two users:
 The app deploys as one Cloudflare Worker. The Worker serves the Vite React UI
 from static assets and exposes token-protected API routes backed by D1.
 
+## Add this snippet to your ~/.codex/AGENTS.md file (Recommended):
+So codex knows what you are talking about when you asking it to interact with your ledger/checklist.
+```
+When I ask to add, inspect, update, finish, or move something in "our <name> ledger", use the `checklist` CLI against that ledger, e.g. `checklist add "..." --ledger "<name>"`; use `checklist ledgers` and `checklist list full --ledger "<name>"` when context is needed, and do not edit D1 directly.
+```
 Current deployment:
 
 ```text
