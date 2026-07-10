@@ -14,6 +14,8 @@ So codex knows what you are talking about when you asking it to interact with yo
 ```
 When I ask to add, inspect, update, finish, or move something in "our <name> ledger", use the `checklist` CLI against that ledger, e.g. `checklist add "..." --ledger "<name>"`; use `checklist ledgers` and `checklist list full --ledger "<name>"` when context is needed, and do not edit D1 directly.
 ```
+
+Agents running in this repo can also load `.agents/skills/checklist-ledger/SKILL.md` for the full coordination protocol (when to add vs. update, ledger selection, failure modes, token rotation handling).
 Current deployment:
 
 ```text
