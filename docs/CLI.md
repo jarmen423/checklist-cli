@@ -49,6 +49,15 @@ $env:CHECKLIST_ADMIN_TOKEN = "PASTE_ADMIN_TOKEN_HERE"
 $env:CHECKLIST_LEDGER_ID = "1"
 ```
 
+Or log in interactively (writes the file for you):
+
+```powershell
+checklist login --api-key PASTE_ADMIN_TOKEN_HERE
+checklist login --api-key PASTE_ADMIN_TOKEN_HERE --api-url https://todo.joshfriedman-dev.com --ledger-id 1
+```
+
+The `login` command does not contact the API — run `checklist ledgers` afterwards to confirm the token works.
+
 ## Ledger Commands
 
 List ledgers:

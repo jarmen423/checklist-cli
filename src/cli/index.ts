@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -35,6 +35,13 @@ async function main(argv: string[]): Promise<void> {
 
   if (!command || command === "help" || command === "--help") {
     printHelp();
+    return;
+  }
+
+  // `login` runs before loadConfig() because the whole point is to write the
+  // config when it is missing. Other commands require both apiUrl and token.
+  if (command === "login") {
+    handleLogin(parseArgs(rest));
     return;
   }
 
@@ -117,6 +124,55 @@ function loadFileConfig(): Partial<CliConfig> {
 
   const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<CliConfig>;
   return parsed;
+}
+
+/**
+ * Writes credentials to ~/.checklist-ledger.json so the CLI can find them
+ * across shells. Merges with any existing config so a re-login doesn't wipe
+ * a previously-set defaultLedgerId. Does not contact the API; if you want to
+ * verify the token, run `checklist ledgers` afterwards.
+ *
+ * Flags:
+ *   --api-key    Bearer token (required).
+ *   --api-url    API base URL. Defaults to the current env var or file value,
+ *                then https://todo.joshfriedman-dev.com.
+ *   --ledger-id  Default ledger id to persist. Optional.
+ */
+function handleLogin(args: ParsedArgs): void {
+  const apiKey = readFlag(args, "api-key");
+  if (!apiKey) {
+    throw new Error("--api-key is required.");
+  }
+
+  const existing = loadFileConfig();
+  const apiUrl = readFlag(args, "api-url") ?? process.env.CHECKLIST_API_URL ?? existing.apiUrl ?? "https://todo.joshfriedman-dev.com";
+  const ledgerIdRaw = readFlag(args, "ledger-id");
+  const defaultLedgerId = ledgerIdRaw ? parseOptionalPositiveInt(ledgerIdRaw) : existing.defaultLedgerId;
+
+  const next: Partial<CliConfig> = { ...existing, apiUrl, adminToken: apiKey };
+  if (defaultLedgerId !== undefined) {
+    next.defaultLedgerId = defaultLedgerId;
+  }
+
+  const path = join(homedir(), ".checklist-ledger.json");
+  writeFileSync(path, JSON.stringify(next, null, 2) + "\n", { mode: 0o600 });
+  // chmod is a no-op on Windows but harmless; the explicit call documents intent.
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // Ignore — Windows doesn't support POSIX perms and we don't want to fail
+    // the login just because we can't lock the file down to the owner.
+  }
+
+  console.log(`Logged in to ${apiUrl}`);
+  if (next.defaultLedgerId !== undefined) {
+    console.log(`Default ledger: ${next.defaultLedgerId}`);
+  }
+}
+
+function readFlag(args: ParsedArgs, name: string): string | undefined {
+  const value = args.flags.get(name);
+  return typeof value === "string" ? value : undefined;
 }
 
 /**
@@ -620,6 +676,7 @@ Commands:
   checklist ledger archive <ledger-id-or-name>
   checklist ledger restore <ledger-id-or-name>
   checklist ledger delete <ledger-id-or-name> --yes
+  checklist login --api-key <token> [--api-url <url>] [--ledger-id <id>]
   checklist find "search text"
   checklist add "Title" --details "Optional details"
   checklist child <item-id-or-title> "Child title"
@@ -644,6 +701,7 @@ Config:
 
 Optional file:
   ~/.checklist-ledger.json with {"apiUrl":"...","adminToken":"...","defaultLedgerId":1}
+  Write one with 'checklist login --api-key <token>'.
 `);
 }
 
